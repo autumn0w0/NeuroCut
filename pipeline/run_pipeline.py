@@ -1,0 +1,64 @@
+from typing import Any
+
+from config import DEFAULT_STYLE, DEFAULT_VIDEO_MINUTES, EXPORTS_DIR
+from helpers.file_utils import ensure_dir, utc_job_id, write_json, write_text
+from helpers.load_style import load_style
+from pipeline.assemble_video import assemble_video
+from pipeline.generate_audio import generate_audio
+from pipeline.generate_captions import generate_captions
+from pipeline.generate_images import generate_images
+from pipeline.generate_scenes import generate_scenes
+from pipeline.generate_script import generate_script
+
+
+def run_pipeline(
+    topic: str,
+    style_name: str = DEFAULT_STYLE,
+    video_minutes: int = DEFAULT_VIDEO_MINUTES,
+    scene_duration: int | None = None,
+    provider: str | None = None,
+) -> dict[str, Any]:
+    style = load_style(style_name)
+    job_id = utc_job_id()
+    job_dir = ensure_dir(EXPORTS_DIR / job_id)
+    frames_dir = ensure_dir(job_dir / "frames")
+    audio_dir = ensure_dir(job_dir / "audio")
+
+    script = generate_script(topic, style, video_minutes, provider=provider)
+    scenes = generate_scenes(script, style, video_minutes, scene_duration)
+
+    image_result = generate_images(scenes, frames_dir)
+    audio_result = generate_audio(script, audio_dir)
+    captions_result = generate_captions(script, audio_dir)
+    render_result = assemble_video(job_dir)
+
+    metadata = {
+        "job_id": job_id,
+        "topic": topic,
+        "style_name": style.get("style_name", style_name),
+        "style_id": style_name,
+        "video_minutes": video_minutes,
+        "scene_count": len(scenes),
+        "scene_duration": scenes[0]["duration"] if scenes else scene_duration,
+        "llm_provider": script["provider"],
+        "llm_model": script["model"],
+        "phases": {
+            "images": image_result,
+            "audio": audio_result,
+            "captions": captions_result,
+            "render": render_result,
+        },
+    }
+
+    write_text(job_dir / "script.txt", script["narration"])
+    write_json(job_dir / "script.json", script)
+    write_json(job_dir / "scenes.json", scenes)
+    write_json(job_dir / "metadata.json", metadata)
+
+    return {
+        "job_id": job_id,
+        "job_dir": str(job_dir),
+        "script": script,
+        "scenes": scenes,
+        "metadata": metadata,
+    }

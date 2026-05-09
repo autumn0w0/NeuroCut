@@ -44,7 +44,8 @@ http://127.0.0.1:8000/docs
   "topic": "Your Life as a Medieval Baker",
   "style_name": "oddly_specific_lives",
   "video_minutes": 1,
-  "scene_duration": 10
+  "scene_duration": 10,
+  "max_images": 6
 }
 ```
 
@@ -79,3 +80,28 @@ LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3
 ```
+
+## Image Providers
+
+The pipeline now tries to create real PNG frames before using the SVG fallback.
+
+Default free web image mode:
+
+```text
+IMAGE_PROVIDER=pollinations
+IMAGE_WIDTH=1280
+IMAGE_HEIGHT=720
+```
+
+Local Stable Diffusion mode with Automatic1111:
+
+```text
+IMAGE_PROVIDER=automatic1111
+AUTOMATIC1111_BASE_URL=http://127.0.0.1:7860
+IMAGE_WIDTH=1280
+IMAGE_HEIGHT=720
+```
+
+Each generated scene includes a `visual_action` field so the image prompt follows the narration beat.
+
+For longer videos, the API creates the full script and scene plan first. If the video has more than 12 scenes, it generates the first 6 images by default and marks the rest as `pending`. Use `max_images` to control how many images are created in the blocking request.

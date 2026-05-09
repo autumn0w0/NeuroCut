@@ -15,6 +15,7 @@ class GenerateRequest(BaseModel):
     video_minutes: int = Field(DEFAULT_VIDEO_MINUTES, ge=1, le=60)
     scene_duration: int | None = Field(default=None, ge=2, le=60)
     provider: str | None = None
+    max_images: int | None = Field(default=None, ge=0, le=120)
 
 
 @router.post("")
@@ -26,6 +27,7 @@ def generate_video_plan(request: GenerateRequest) -> dict[str, Any]:
             video_minutes=request.video_minutes,
             scene_duration=request.scene_duration,
             provider=request.provider,
+            max_images=request.max_images,
         )
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

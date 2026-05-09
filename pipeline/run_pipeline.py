@@ -1,4 +1,5 @@
 from typing import Any
+import zlib
 
 from config import DEFAULT_STYLE, DEFAULT_VIDEO_MINUTES, EXPORTS_DIR
 from helpers.file_utils import ensure_dir, utc_job_id, write_json, write_text
@@ -17,6 +18,7 @@ def run_pipeline(
     video_minutes: int = DEFAULT_VIDEO_MINUTES,
     scene_duration: int | None = None,
     provider: str | None = None,
+    max_images: int | None = None,
 ) -> dict[str, Any]:
     style = load_style(style_name)
     job_id = utc_job_id()
@@ -27,8 +29,14 @@ def run_pipeline(
     script = generate_script(topic, style, video_minutes, provider=provider)
     scenes = generate_scenes(script, style, video_minutes, scene_duration)
     total_duration = sum(int(scene["duration"]) for scene in scenes)
+    job_seed = zlib.crc32(f"{topic}:{style_name}".encode("utf-8")) % 100000
 
-    image_result = generate_images(scenes, frames_dir)
+    write_text(job_dir / "script.txt", script["narration"])
+    write_json(job_dir / "script.json", script)
+    write_json(job_dir / "scenes.json", scenes)
+
+    image_limit = max_images if max_images is not None else (6 if len(scenes) > 12 else None)
+    image_result = generate_images(scenes, frames_dir, job_seed=job_seed, max_images=image_limit)
     audio_result = generate_audio(script, audio_dir, total_duration)
     captions_result = generate_captions(scenes, audio_dir)
     render_result = assemble_video(job_dir)
@@ -42,6 +50,9 @@ def run_pipeline(
         "scene_count": len(scenes),
         "scene_duration": scenes[0]["duration"] if scenes else scene_duration,
         "total_duration": total_duration,
+        "job_seed": job_seed,
+        "character_profile": scenes[0].get("character_profile") if scenes else None,
+        "image_generation_limit": image_limit,
         "llm_provider": script["provider"],
         "llm_model": script["model"],
         "phases": {
@@ -52,9 +63,6 @@ def run_pipeline(
         },
     }
 
-    write_text(job_dir / "script.txt", script["narration"])
-    write_json(job_dir / "script.json", script)
-    write_json(job_dir / "scenes.json", scenes)
     write_json(job_dir / "metadata.json", metadata)
 
     return {

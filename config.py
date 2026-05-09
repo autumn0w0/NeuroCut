@@ -29,3 +29,8 @@ OPENROUTER_API_KEY = get_env("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = get_env("OPENROUTER_MODEL", "deepseek/deepseek-chat")
 OLLAMA_MODEL = get_env("OLLAMA_MODEL", "llama3")
 OLLAMA_BASE_URL = get_env("OLLAMA_BASE_URL", "http://localhost:11434")
+
+IMAGE_PROVIDER = get_env("IMAGE_PROVIDER", "pollinations")
+IMAGE_WIDTH = int(get_env("IMAGE_WIDTH", "1280") or "1280")
+IMAGE_HEIGHT = int(get_env("IMAGE_HEIGHT", "720") or "720")
+AUTOMATIC1111_BASE_URL = get_env("AUTOMATIC1111_BASE_URL", "http://127.0.0.1:7860")

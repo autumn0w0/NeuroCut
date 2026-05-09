@@ -32,6 +32,8 @@ Return a complete narration only. Use short sensory paragraphs and a quiet emoti
 
 
 def _title_for(topic: str, style: dict[str, Any]) -> str:
+    if topic.lower().startswith(("your life as", "a day in the life", "pov:")):
+        return topic
     patterns = style.get("title_patterns") or ["Your Life as a _____"]
     pattern = patterns[0]
     return pattern.replace("_____", topic).replace("POV:", "POV:")

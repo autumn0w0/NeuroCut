@@ -37,9 +37,10 @@ def _chunk_narration(narration: str, count: int) -> list[str]:
     if not sentences:
         return ["Quiet cinematic moment."] * count
 
-    chunks = [[] for _ in range(count)]
-    for index, sentence in enumerate(sentences):
-        chunks[index % count].append(sentence)
+    per_chunk = max(1, ceil(len(sentences) / count))
+    chunks = [sentences[index : index + per_chunk] for index in range(0, len(sentences), per_chunk)]
+    while len(chunks) < count:
+        chunks.append([sentences[-1]])
     return [". ".join(chunk).strip() + "." if chunk else sentences[-1] + "." for chunk in chunks]
 
 

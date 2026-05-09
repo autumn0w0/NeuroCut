@@ -26,10 +26,11 @@ def run_pipeline(
 
     script = generate_script(topic, style, video_minutes, provider=provider)
     scenes = generate_scenes(script, style, video_minutes, scene_duration)
+    total_duration = sum(int(scene["duration"]) for scene in scenes)
 
     image_result = generate_images(scenes, frames_dir)
-    audio_result = generate_audio(script, audio_dir)
-    captions_result = generate_captions(script, audio_dir)
+    audio_result = generate_audio(script, audio_dir, total_duration)
+    captions_result = generate_captions(scenes, audio_dir)
     render_result = assemble_video(job_dir)
 
     metadata = {
@@ -40,6 +41,7 @@ def run_pipeline(
         "video_minutes": video_minutes,
         "scene_count": len(scenes),
         "scene_duration": scenes[0]["duration"] if scenes else scene_duration,
+        "total_duration": total_duration,
         "llm_provider": script["provider"],
         "llm_model": script["model"],
         "phases": {

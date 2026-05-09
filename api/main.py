@@ -18,3 +18,12 @@ app.include_router(export_router)
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/")
+def root() -> dict[str, str]:
+    return {
+        "name": "NeuroCut API",
+        "docs": "/docs",
+        "health": "/health",
+    }

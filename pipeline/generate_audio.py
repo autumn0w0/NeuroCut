@@ -1,23 +1,87 @@
 from pathlib import Path
+import base64
 import subprocess
 import wave
+
+import requests
+
+from config import GEMINI_TTS_MODEL, GEMINI_TTS_VOICE, GOOGLE_API_KEY
 
 
 def generate_audio(script: dict, audio_dir: Path, total_duration: int) -> dict:
     audio_dir.mkdir(parents=True, exist_ok=True)
     voiceover_path = audio_dir / "voiceover.wav"
-    tts_result = _write_windows_tts(script["narration"], voiceover_path, total_duration)
+    provider = "gemini"
+    tts_result = _write_gemini_tts(script["narration"], voiceover_path)
     if not tts_result:
+        provider = "windows"
+        tts_result = _write_windows_tts(script["narration"], voiceover_path, total_duration)
+    if tts_result:
+        _fit_wav_to_duration(voiceover_path, total_duration)
+    else:
+        provider = "silence"
         _write_silence_wav(voiceover_path, total_duration)
     actual_duration = _wav_duration(voiceover_path)
     return {
         "status": "created",
-        "reason": "Created Windows TTS voiceover." if tts_result else "Windows TTS failed, created a silent timing track.",
+        "provider": provider,
+        "voice": GEMINI_TTS_VOICE if provider == "gemini" else None,
+        "reason": _audio_reason(provider),
         "voiceover_path": str(voiceover_path),
         "duration": round(actual_duration, 2),
         "target_duration": total_duration,
         "music_path": None,
     }
+
+
+def _write_gemini_tts(text: str, output_path: Path) -> bool:
+    if not GOOGLE_API_KEY:
+        return False
+
+    prompt = (
+        "Read this script in a deep, calm, mysterious, slightly dark cinematic storytelling tone. "
+        "Keep the pacing controlled and serious. Script:\n\n"
+        f"{text}"
+    )
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{GEMINI_TTS_MODEL}:generateContent"
+    )
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseModalities": ["AUDIO"],
+            "speechConfig": {
+                "voiceConfig": {
+                    "prebuiltVoiceConfig": {
+                        "voiceName": GEMINI_TTS_VOICE,
+                    }
+                }
+            },
+        },
+    }
+    try:
+        response = requests.post(
+            url,
+            headers={"x-goog-api-key": GOOGLE_API_KEY, "Content-Type": "application/json"},
+            json=payload,
+            timeout=300,
+        )
+        response.raise_for_status()
+        data = response.json()["candidates"][0]["content"]["parts"][0]["inlineData"]["data"]
+        pcm = base64.b64decode(data)
+        _write_pcm_wav(output_path, pcm, sample_rate=24000)
+        return output_path.exists() and output_path.stat().st_size > 44
+    except (KeyError, requests.RequestException, ValueError):
+        return False
+
+
+def _audio_reason(provider: str) -> str:
+    if provider == "gemini":
+        return f"Created Gemini TTS voiceover using {GEMINI_TTS_VOICE}."
+    if provider == "windows":
+        return "Gemini TTS unavailable, created Windows TTS voiceover."
+    return "Gemini and Windows TTS failed, created a silent timing track."
 
 
 def _write_windows_tts(text: str, output_path: Path, target_duration: int) -> bool:
@@ -87,6 +151,14 @@ def _write_silence_wav(path: Path, duration_seconds: int) -> None:
         chunk = b"\x00\x00" * sample_rate
         for _ in range(max(1, duration_seconds)):
             wav.writeframes(chunk)
+
+
+def _write_pcm_wav(path: Path, pcm: bytes, sample_rate: int) -> None:
+    with wave.open(str(path), "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(pcm)
 
 
 def _wav_duration(path: Path) -> float:

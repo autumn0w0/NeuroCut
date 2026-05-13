@@ -4,122 +4,139 @@ from helpers.call_llm import call_llm
 
 
 def generate_script(
-    topic: str,
-    style: dict[str, Any],
-    video_minutes: int = 1,
+    title: str,
+    base_idea: str,
+    video_minutes: int = 8,
     provider: str | None = None,
 ) -> dict[str, Any]:
     target_words = video_minutes * 125
     system = (
-        "You are a cinematic faceless-video scriptwriter. Write immersive narration "
-        "that follows the supplied creator style and avoids copying any real creator verbatim."
+        "You are an elite YouTube scriptwriter for high-retention faceless storytelling videos. "
+        "Write in second person using short, cinematic, punchy lines."
     )
     prompt = f"""
-Topic: {topic}
-Target length: {video_minutes} minute(s)
-Target words: about {target_words} words
-Style profile: {style}
+Video title: {title}
+Base idea: {base_idea}
+
+Write a full {video_minutes} minute YouTube script.
+Target words: about {target_words} words.
+
+Use an invisible level-based progression structure.
+Each stage should feel like growth, pressure, risk, consequences, or deeper emotional involvement.
+
+Rules:
+- Start immediately. No long intro.
+- Do not physically write "Level 1", "Level 2", or level labels in the script.
+- Use second-person perspective: "you".
+- Use short, impactful sentences.
+- Keep a dark, serious, cinematic, immersive tone.
+- Show increasing stakes.
+- Include money pressure, risk, consequences, emotional shifts, and realistic details.
+- Every sentence should move the story forward.
+- End with a powerful consequence, downfall, twist, or cycle continuation.
 
 Return a complete narration only. Use short sensory paragraphs and a quiet emotional arc.
 Do not include labels, notes, directions, markdown, or timing comments.
 """
-    result = call_llm(prompt, system=system, provider=provider)
-    narration = result.text.strip() or _fallback_script(topic, style, video_minutes)
+    try:
+        result = call_llm(prompt, system=system, provider=provider)
+        narration = result.text.strip() or _fallback_script(title, base_idea, video_minutes)
+    except Exception as exc:
+        result = type("LLMFallback", (), {"provider": "fallback", "model": exc.__class__.__name__})()
+        narration = _fallback_script(title, base_idea, video_minutes)
     narration = _fit_word_budget(narration, target_words)
     return {
-        "topic": topic,
-        "title": _title_for(topic, style),
+        "title": title,
+        "base_idea": base_idea,
         "narration": narration,
         "provider": result.provider,
         "model": result.model,
     }
 
 
-def _title_for(topic: str, style: dict[str, Any]) -> str:
-    if topic.lower().startswith(("your life as", "a day in the life", "pov:")):
-        return topic
-    patterns = style.get("title_patterns") or ["Your Life as a _____"]
-    pattern = patterns[0]
-    return pattern.replace("_____", topic).replace("POV:", "POV:")
-
-
-def _fallback_script(topic: str, style: dict[str, Any], video_minutes: int) -> str:
+def _fallback_script(title: str, base_idea: str, video_minutes: int) -> str:
     if video_minutes <= 1:
         return "\n\n".join(
             [
-                f"You wake up as a medieval baker before the town has opened its eyes.",
-                "The kitchen is warm, the table is dusty with flour, and the first loaves are already waiting for your hands.",
-                "You knead, fold, and listen to the oven breathe behind you.",
-                "People will remember the bread, not the tired person who made it.",
-                "Still, for one quiet moment, the whole street depends on this small room, this fire, and you.",
-                "Tomorrow will begin the same way. Before sunrise. Before applause. Before anyone knows your name.",
+                f"You step into {title}.",
+                base_idea,
+                "At first, it feels simple.",
+                "Then the pressure starts showing up in small ways.",
+                "Money becomes tight. Time becomes smaller. Sleep becomes something you borrow.",
+                "By the end, you understand that surviving the system is not the same as winning it.",
             ]
         )
-    if any(word in topic.lower() for word in ("restaurant", "cafe", "shop", "store")):
-        return _restaurant_script(topic, video_minutes)
-    return "\n\n".join(
-        [
-            f"You wake up inside the world of {topic}. The day has already started without asking your permission.",
-            f"The room is quiet, but every object seems to know its job. Your hands move first. Your thoughts arrive later.",
-            f"You follow the small rituals that keep this life together. The light changes slowly. The work repeats itself, and somehow the repetition begins to feel like a language.",
-            f"By the middle of the day, the weight of this life becomes clear. Not dramatic. Not loud. Just present in the corners, in the pauses, in the things nobody else notices.",
-            f"Evening comes softly. You understand that {topic} is not only a role, but a way of being seen by the world.",
-            f"And tomorrow, before sunrise, you will begin again. The same room. The same quiet. The same strange comfort of being exactly here.",
-        ]
-    )
+    beats = _neet_beats(title, base_idea) if "neet" in title.lower() else _generic_beats(title, base_idea)
+    target_paragraphs = max(8, min(len(beats), video_minutes * 3))
+    return "\n\n".join(beats[:target_paragraphs])
 
 
-def _restaurant_script(topic: str, video_minutes: int) -> str:
-    beats = [
+def _neet_beats(title: str, base_idea: str) -> list[str]:
+    return [
         (
-            "You wake up while the street is still blue and quiet. "
-            "The restaurant key feels cold in your hand. When the metal shutter rises, the sound rolls down the empty road like an announcement that the day has begun."
+            "You finish tenth standard and everyone says the same sentence. "
+            "If you are serious about becoming a doctor, you go to Kota."
         ),
         (
-            "Inside, everything waits for you. The chairs are upside down on the tables, the counter smells faintly of yesterday's coffee, and the kitchen is dark except for one tired bulb above the sink."
+            "So you pack two bags, one water bottle, and a version of yourself that still believes hard work has a clean result."
         ),
         (
-            "You turn on the lights one by one. The room changes from a closed box into a place where people will sit, talk, complain, laugh, and leave behind crumbs you will clean after sunset."
+            "The hostel room is smaller than the photos. The mattress is thin. The fan makes noise. The city does not wait for you to adjust."
         ),
         (
-            "The first job is not cooking. It is remembering. You check the cash drawer, wipe the glass door, fill the water bottles, count the bread, and hope nothing important was forgotten last night."
+            "Your first lecture starts before your body understands the schedule. Biology feels manageable. Physics does not. Chemistry moves like a train you almost catch."
         ),
         (
-            "By six, the kitchen starts breathing. Oil warms in the pan, steam climbs from the kettle, and the first chopped onions sting your eyes before the first customer has even arrived."
+            "Food becomes the first enemy. The mess dal is watery. The rotis are cold. You call home and say it is fine because your mother already sounds worried."
         ),
         (
-            "A delivery worker passes the window. A bus sighs at the corner. Someone looks at your sign, slows down, and keeps walking. You pretend not to notice, but you always notice."
+            "Money becomes the second enemy. Coaching fees are paid. Hostel rent is due. Test series costs extra. Even a notebook starts feeling expensive."
         ),
         (
-            "Then the first customer comes in. They do not know they are first. They only ask for something hot, something quick, something normal. To you, it feels like the restaurant has finally woken up."
+            "You learn the map of Kota through pressure. Coaching building. Hostel gate. Mess line. Medical shop. Photocopy counter. Same roads. Same tired faces."
         ),
         (
-            "The morning becomes a chain of tiny emergencies. A spoon is missing, the card machine freezes, one table wants extra sauce, and the bread you thought would last until noon is disappearing too fast."
+            "The first minor test breaks your confidence quietly. You do not fail loudly. You just score less than the students who look like they are not even trying."
         ),
         (
-            "Still, there are small rewards. The quiet nod from someone who likes the food. The warm plate leaving your hands. The second when the room is full and every chair has a reason to exist."
+            "You start waking earlier. You stop watching videos. You delete games. You tell yourself discipline will fix everything."
         ),
         (
-            "Around midday, you stop hearing individual sounds. The doorbell, the orders, the pan, the voices, the chairs, the register, all of it becomes one moving machine, and somehow you are inside it."
+            "But discipline does not stop loneliness. At night, the room becomes too quiet. Other students cry on calls. Some pretend they are stronger than they are."
         ),
         (
-            "You think about closing for one minute, just to breathe. But another person walks in, and your face becomes polite before your body has time to be tired."
+            "Your parents ask about marks. You talk about improvement. You do not mention the panic before every test or the guilt after every bad result."
         ),
         (
-            "By afternoon, the rush fades. Plates come back empty. The floor is marked with footprints. The kitchen smells like oil, soap, and effort. You eat standing up because sitting down feels too official."
+            "Months pass. The syllabus becomes heavier. Revision becomes a mountain. Every student starts calculating rank, cutoff, category, luck, and backup plans."
         ),
         (
-            "Evening brings a softer kind of work. You refill, reset, wipe, count, and listen to the room become hollow again. Every table looks innocent once nobody is sitting at it."
+            "On exam day, your hands are cold. The paper is not impossible. That makes it worse. Because every mistake feels personal."
         ),
         (
-            "When you lock the door, the restaurant becomes quiet in a different way. Not asleep, exactly. More like it is holding its breath until you return."
+            "The result comes like a number with no emotion. Not enough. Not this year. Not after all that rent, all those calls, all those mornings."
         ),
         (
-            "Tomorrow morning, the key will feel cold again. The street will be empty again. And you will open the door as if this small place depends on you, because in a way, it does."
+            "Then someone says the next sentence. Take a drop. One more year. One more room. One more chance to become the person everyone already announced you would be."
         ),
     ]
-    target_paragraphs = max(6, min(len(beats), video_minutes * 3))
-    return "\n\n".join(beats[:target_paragraphs])
+
+
+def _generic_beats(title: str, base_idea: str) -> list[str]:
+    return [
+        f"You enter the world of {title} with one simple belief.",
+        base_idea,
+        "At first, the rules look clear.",
+        "Then the small costs begin.",
+        "You lose time first.",
+        "Then money.",
+        "Then the easy version of your confidence.",
+        "Every day adds a new task, a new mistake, and a new reason not to quit.",
+        "People outside the system think progress is visible.",
+        "Inside it, progress feels like surviving one more day without falling apart.",
+        "The deeper you go, the more normal the pressure becomes.",
+        "By the end, you are not the same person who started.",
+    ]
 
 
 def _fit_word_budget(narration: str, target_words: int) -> str:

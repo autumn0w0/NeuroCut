@@ -1,16 +1,19 @@
 # NeuroCut
 
-NeuroCut is an AI video generation backend for creator-style analysis and scene-based faceless video planning.
+NeuroCut is an AI video generation backend for faceless storytelling videos.
 
-The current MVP focuses on Phase 1:
+The current generation flow is simple:
 
-- Save and load reusable JSON style profiles
-- Generate a narration plan from a topic and selected style
-- Split narration into timed scenes
-- Produce image prompts, camera motion, transitions, and metadata
-- Store each generation run under `exports/job_*`
-
-Phase 2 will add image generation, voiceover, subtitles, and FFmpeg rendering.
+- User enters `title`
+- User enters `base_idea`
+- Every video is fixed at 8 minutes
+- The system writes a second-person cinematic script
+- The script is split sentence-by-sentence into scenes
+- Each sentence gets a matching image prompt
+- The number of prompts equals the number of images
+- Image prompts are saved in 4 parts
+- Gemini TTS creates narration with the `Achird` voice
+- Scene images are generated as PNGs when an image provider is available
 
 ## Run The API
 
@@ -19,73 +22,63 @@ pip install -r requirements.txt
 uvicorn api.main:app --reload
 ```
 
-Then open:
+Open:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-## Main Endpoints
-
-- `GET /health`
-- `GET /styles`
-- `GET /styles/{style_name}`
-- `POST /styles`
-- `POST /generate`
-- `GET /exports`
-- `GET /exports/{job_id}`
-- `GET /exports/{job_id}/scenes`
-- `GET /exports/{job_id}/script`
-
-## Example Generate Request
+## Generate Request
 
 ```json
 {
-  "topic": "Your Life as a Medieval Baker",
-  "style_name": "oddly_specific_lives",
-  "video_minutes": 1,
-  "scene_duration": 10,
-  "max_images": 6
+  "title": "Your Life As a NEET Aspirant in Kota",
+  "base_idea": "You just completed 10th and moved to Kota for NEET prep. You have a hard time adjusting to food and schedule. You are having money problems and even after all the hardships you still cannot clear NEET in the first attempt and take a drop."
 }
 ```
 
-This creates:
+## Output
 
 ```text
 exports/job_YYYYMMDD_HHMMSS/
   script.txt
   script.json
   scenes.json
+  image_prompts_part_1.json
+  image_prompts_part_2.json
+  image_prompts_part_3.json
+  image_prompts_part_4.json
   metadata.json
   frames/
   audio/
+    voiceover.wav
+    subtitles.srt
 ```
 
-## LLM Providers
+## Gemini TTS
 
-By default, the app uses a deterministic local fallback so the MVP works without API keys.
-
-Optional `.env` settings:
+Set one of these in `.env`:
 
 ```text
-LLM_PROVIDER=groq
-GROQ_API_KEY=...
-GROQ_MODEL=llama-3.1-70b-versatile
+GOOGLE_API_KEY=...
+```
 
-LLM_PROVIDER=openrouter
-OPENROUTER_API_KEY=...
-OPENROUTER_MODEL=deepseek/deepseek-chat
+or:
 
-LLM_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=llama3
+```text
+GEMINI_API_KEY=...
+```
+
+Optional:
+
+```text
+GEMINI_TTS_MODEL=gemini-2.5-flash-preview-tts
+GEMINI_TTS_VOICE=Achird
 ```
 
 ## Image Providers
 
-The pipeline now tries to create real PNG frames before using the SVG fallback.
-
-Default free web image mode:
+Default:
 
 ```text
 IMAGE_PROVIDER=pollinations
@@ -93,15 +86,11 @@ IMAGE_WIDTH=1280
 IMAGE_HEIGHT=720
 ```
 
-Local Stable Diffusion mode with Automatic1111:
+Local Stable Diffusion with Automatic1111:
 
 ```text
 IMAGE_PROVIDER=automatic1111
 AUTOMATIC1111_BASE_URL=http://127.0.0.1:7860
-IMAGE_WIDTH=1280
-IMAGE_HEIGHT=720
 ```
 
-Each generated scene includes a `visual_action` field so the image prompt follows the narration beat.
-
-For longer videos, the API creates the full script and scene plan first. If the video has more than 12 scenes, it generates the first 6 images by default and marks the rest as `pending`. Use `max_images` to control how many images are created in the blocking request.
+The pipeline generates one image per script sentence.

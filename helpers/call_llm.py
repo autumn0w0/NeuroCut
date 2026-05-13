@@ -5,6 +5,8 @@ import requests
 from config import (
     GROQ_API_KEY,
     GROQ_MODEL,
+    GEMINI_TEXT_MODEL,
+    GOOGLE_API_KEY,
     LLM_PROVIDER,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
@@ -22,6 +24,10 @@ class LLMResult:
 
 def call_llm(prompt: str, system: str = "", provider: str | None = None) -> LLMResult:
     selected = (provider or LLM_PROVIDER or "mock").lower()
+    if selected == "mock" and GOOGLE_API_KEY:
+        selected = "gemini"
+    if selected == "gemini" and GOOGLE_API_KEY:
+        return _call_gemini(prompt, system)
     if selected == "groq" and GROQ_API_KEY:
         return _call_openai_compatible(
             "https://api.groq.com/openai/v1/chat/completions",
@@ -43,6 +49,22 @@ def call_llm(prompt: str, system: str = "", provider: str | None = None) -> LLMR
     if selected == "ollama":
         return _call_ollama(prompt, system)
     return LLMResult(text="", provider="mock", model="deterministic-fallback")
+
+
+def _call_gemini(prompt: str, system: str) -> LLMResult:
+    response = requests.post(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_TEXT_MODEL}:generateContent",
+        headers={"x-goog-api-key": GOOGLE_API_KEY, "Content-Type": "application/json"},
+        json={
+            "systemInstruction": {"parts": [{"text": system}]},
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.85},
+        },
+        timeout=180,
+    )
+    response.raise_for_status()
+    text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    return LLMResult(text=text, provider="gemini", model=GEMINI_TEXT_MODEL)
 
 
 def _call_openai_compatible(

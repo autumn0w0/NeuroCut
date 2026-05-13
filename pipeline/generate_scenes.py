@@ -1,159 +1,132 @@
-from math import ceil
+import re
 from typing import Any
-
-from config import DEFAULT_SCENE_DURATION_SECONDS
 
 
 def generate_scenes(
     script: dict[str, Any],
-    style: dict[str, Any],
-    video_minutes: int = 1,
+    video_minutes: int = 8,
     scene_duration: int | None = None,
 ) -> list[dict[str, Any]]:
-    duration = scene_duration or style.get("scene_system", {}).get(
-        "default_scene_duration", DEFAULT_SCENE_DURATION_SECONDS
-    )
-    scene_count = max(1, ceil((video_minutes * 60) / duration))
-    narration_chunks = _chunk_narration(script["narration"], scene_count)
+    sentences = _sentences(script["narration"])
+    total_duration = video_minutes * 60
 
-    motions = style.get("scene_system", {}).get("camera_motion", ["slow zoom"])
-    transitions = style.get("scene_system", {}).get("scene_transition", ["fade"])
-    character_profile = _character_profile(script["topic"])
+    if scene_duration:
+        target_count = max(1, total_duration // scene_duration)
+        sentences = _fit_sentence_count(sentences, target_count)
+        durations = [scene_duration] * len(sentences)
+    else:
+        durations = _spread_duration(total_duration, len(sentences))
+
+    character_profile = _character_profile(script["title"], script["base_idea"])
     scenes = []
-    for index in range(scene_count):
-        visual_action = _visual_action(script["topic"], narration_chunks[index], index + 1)
+    for index, sentence in enumerate(sentences):
+        visual_action = _visual_action(script["title"], script["base_idea"], sentence, index + 1)
         scenes.append(
             {
                 "scene_number": index + 1,
-                "duration": duration,
-                "narration": narration_chunks[index],
+                "duration": durations[index],
+                "narration": sentence,
                 "character_profile": character_profile,
                 "visual_action": visual_action,
-                "image_prompt": _image_prompt(
-                    script["topic"],
-                    narration_chunks[index],
-                    style,
-                    visual_action,
-                    character_profile,
-                ),
-                "camera_motion": motions[index % len(motions)],
-                "transition": transitions[index % len(transitions)],
-                "music_mood": _music_mood(style),
+                "image_prompt": _image_prompt(script["title"], sentence, visual_action, character_profile),
+                "camera_motion": _camera_motion(index),
+                "transition": "cut" if index % 3 else "quick fade",
+                "music_mood": "dark cinematic ambient",
             }
         )
     return scenes
 
 
-def _chunk_narration(narration: str, count: int) -> list[str]:
-    sentences = [part.strip() for part in narration.replace("\n", " ").split(".") if part.strip()]
-    if not sentences:
-        return ["Quiet cinematic moment."] * count
-
-    per_chunk = max(1, ceil(len(sentences) / count))
-    chunks = [sentences[index : index + per_chunk] for index in range(0, len(sentences), per_chunk)]
-    while len(chunks) < count:
-        chunks.append([sentences[-1]])
-    return [". ".join(chunk).strip() + "." if chunk else sentences[-1] + "." for chunk in chunks]
+def _sentences(text: str) -> list[str]:
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    parts = re.split(r"(?<=[.!?])\s+", cleaned)
+    return [part.strip() for part in parts if part.strip()]
 
 
-def _image_prompt(
-    topic: str,
-    narration: str,
-    style: dict[str, Any],
-    visual_action: str,
-    character_profile: str,
-) -> str:
+def _fit_sentence_count(sentences: list[str], target_count: int) -> list[str]:
+    if len(sentences) >= target_count:
+        return sentences[:target_count]
+    return sentences + [sentences[-1]] * (target_count - len(sentences))
+
+
+def _spread_duration(total_seconds: int, count: int) -> list[int]:
+    count = max(1, count)
+    base = total_seconds // count
+    remainder = total_seconds % count
+    return [base + (1 if index < remainder else 0) for index in range(count)]
+
+
+def _image_prompt(title: str, narration: str, visual_action: str, character_profile: str) -> str:
     return (
-        "clean 2D faceless storytime animation still, thick black outlines, smooth vector cartoon, "
-        "round white simple characters with dot eyes, expressive body language, warm YouTube explainer style, "
-        "detailed cozy background, polished digital illustration, 16:9 frame, "
-        "keep the same recurring main character design in every scene, "
-        f"main character: {character_profile}, "
-        f"scene action: {visual_action}, topic: {topic}, narration context: {narration}"
-    ).strip()
+        "minimal stickman storytelling YouTube animation frame, clean flat design, beige or light background, "
+        "thick dark brown outlines, simple round head character, thin body, minimal facial features, "
+        "slightly expressive face, cinematic composition, medium shot or side view, no clutter, "
+        "consistent recurring character, "
+        f"main character design: {character_profile}, "
+        f"video title: {title}, "
+        f"scene: {visual_action}, "
+        f"matching narration sentence: {narration}"
+    )
 
 
-def _music_mood(style: dict[str, Any]) -> str:
-    genres = style.get("music_style", {}).get("genres", ["ambient"])
-    return genres[0]
+def _visual_action(title: str, base_idea: str, sentence: str, scene_number: int) -> str:
+    text = f"{title} {base_idea} {sentence}".lower()
 
-
-def _visual_action(topic: str, narration: str, scene_number: int) -> str:
-    text = f"{topic} {narration}".lower()
+    if "kota" in text or "neet" in text:
+        if any(word in text for word in ("tenth", "10th", "pack", "bags", "move")):
+            return "teen student leaving home with two bags while parents stand behind, emotional railway station mood"
+        if any(word in text for word in ("hostel", "room", "mattress", "fan")):
+            return "small Kota hostel room with thin mattress, noisy ceiling fan, open suitcase, student sitting silently"
+        if any(word in text for word in ("lecture", "physics", "chemistry", "biology", "coaching")):
+            return "crowded coaching classroom in Kota, student struggling to follow equations on board"
+        if any(word in text for word in ("food", "mess", "dal", "roti")):
+            return "student in hostel mess looking disappointed at watery dal and cold roti on steel plate"
+        if any(word in text for word in ("money", "fees", "rent", "notebook")):
+            return "student counting limited cash beside coaching fee receipt, rent note, and empty wallet"
+        if any(word in text for word in ("test", "marks", "score", "rank")):
+            return "student staring at low test marks on paper while other students compare scores nearby"
+        if any(word in text for word in ("night", "lonely", "cry", "panic")):
+            return "student alone at night under desk lamp, books open, phone call from home on screen"
+        if any(word in text for word in ("exam", "paper")):
+            return "NEET exam hall, student holding pen with cold nervous hands, answer sheet on desk"
+        if any(word in text for word in ("result", "not enough", "drop")):
+            return "student looking at result screen showing not selected, drop year form beside laptop"
+        return "Kota student walking between hostel and coaching center carrying books, tired but determined"
 
     if any(word in text for word in ("restaurant", "cafe", "shop", "store")):
-        if any(word in text for word in ("wake", "morning", "sunrise", "open", "unlock")):
-            return (
-                "early morning outside a small restaurant, main character unlocking the front door, "
-                "warm sunrise light, empty street, signboard, shutters half open"
-            )
-        if any(word in text for word in ("customer", "people", "order", "serve")):
-            return (
-                "inside a small busy restaurant, faceless customers at tables, main character serving food, "
-                "counter, menu board, warm kitchen light"
-            )
-        if any(word in text for word in ("close", "night", "evening", "tomorrow")):
-            return (
-                "quiet restaurant after closing, main character wiping a table, chairs stacked, "
-                "soft evening light through the windows"
-            )
-        return (
-            "inside a small restaurant kitchen, main character preparing the first orders, pans, counter, "
-            "warm light and clean cartoon details"
-        )
-
-    if any(word in text for word in ("baker", "bakery", "bread", "flour", "oven")):
-        if any(word in text for word in ("wake", "morning", "sunrise", "before")):
-            return (
-                "early morning bakery exterior, faceless baker opening the bakery door, warm light inside, "
-                "quiet street and bread sign"
-            )
-        if any(word in text for word in ("knead", "flour", "hands", "loaves")):
-            return (
-                "inside a cozy bakery kitchen, faceless baker kneading dough on a wooden table, flour, "
-                "bread trays, glowing oven"
-            )
-        if any(word in text for word in ("people", "street", "depends", "remember")):
-            return (
-                "bakery counter with townspeople waiting for fresh bread, faceless baker handing over loaves, "
-                "warm cheerful morning interior"
-            )
-        return "cozy bakery interior with oven glow, bread loaves, flour table, faceless baker working quietly"
-
-    if any(word in text for word in ("wake", "morning", "sunrise")):
-        return "main character waking up in a small warm room at sunrise, simple faceless cartoon style"
-    if any(word in text for word in ("work", "hands", "routine")):
-        return "main character doing daily work with focused hands, tools on table, warm detailed interior"
-    if any(word in text for word in ("evening", "night", "tomorrow")):
-        return "quiet evening room, main character standing near window, soft lamp light, reflective mood"
+        if any(word in text for word in ("wake", "morning", "open", "unlock")):
+            return "early morning outside small restaurant, owner unlocking shutter in quiet street"
+        if any(word in text for word in ("customer", "order", "serve")):
+            return "small restaurant interior, owner serving first customer at counter"
+        if any(word in text for word in ("money", "cash", "rent")):
+            return "restaurant owner counting cash beside bills and rent notice"
+        return "restaurant owner working behind counter in clean simple interior"
 
     beats = [
-        "establishing shot of the main character entering their daily world",
-        "medium shot of the main character doing the central routine",
-        "two faceless characters having a quiet emotional moment indoors",
-        "main character pausing thoughtfully in a detailed warm room",
+        "main character entering a new difficult world",
+        "main character facing the first uncomfortable challenge",
+        "main character dealing with money pressure and responsibility",
+        "main character sitting alone after a setback",
+        "main character continuing despite exhaustion",
     ]
     return beats[(scene_number - 1) % len(beats)]
 
 
-def _character_profile(topic: str) -> str:
-    text = topic.lower()
+def _character_profile(title: str, base_idea: str) -> str:
+    text = f"{title} {base_idea}".lower()
+    if "neet" in text or "kota" in text:
+        return (
+            "same teenage Indian NEET aspirant, simple stickman body, round white head, "
+            "short black hair, blue hoodie, backpack, tired serious expression"
+        )
     if any(word in text for word in ("restaurant", "cafe", "shop", "store")):
         return (
-            "faceless young restaurant owner, round white head with small black dot eyes, "
-            "short black hair, teal apron over cream shirt, dark trousers, simple white hands"
+            "same young restaurant owner, simple stickman body, round white head, "
+            "short black hair, teal apron, serious focused expression"
         )
-    if any(word in text for word in ("baker", "bakery", "bread")):
-        return (
-            "faceless medieval baker, round white head with small black dot eyes, "
-            "tan linen shirt, brown apron, rolled sleeves, simple white hands"
-        )
-    if any(word in text for word in ("student", "school", "college")):
-        return (
-            "faceless student, round white head with small black dot eyes, "
-            "navy hoodie, backpack strap, simple white hands"
-        )
-    return (
-        "faceless main character, round white head with small black dot eyes, "
-        "blue sweater, dark trousers, simple white hands"
-    )
+    return "same simple stickman main character, round white head, blue shirt, serious expression"
+
+
+def _camera_motion(index: int) -> str:
+    motions = ["slow push in", "subtle pan right", "slow zoom out", "still dramatic frame"]
+    return motions[index % len(motions)]

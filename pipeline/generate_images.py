@@ -7,26 +7,11 @@ def generate_images(
     scenes: list[dict],
     frames_dir: Path,
     job_seed: int | None = None,
-    max_images: int | None = None,
 ) -> list[dict]:
     frames_dir.mkdir(parents=True, exist_ok=True)
     base_seed = job_seed or 1000
     results = []
     for scene in scenes:
-        if max_images is not None and len(results) >= max_images:
-            results.append(
-                {
-                    "scene_number": scene["scene_number"],
-                    "status": "pending",
-                    "path": None,
-                    "provider": None,
-                    "kind": "faceless_cartoon_image",
-                    "visual_action": scene.get("visual_action"),
-                    "prompt": scene["image_prompt"],
-                }
-            )
-            continue
-
         image_path = frames_dir / f"scene_{scene['scene_number']:03}.png"
         result = generate_scene_image(
             scene["image_prompt"],

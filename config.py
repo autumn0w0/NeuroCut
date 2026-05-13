@@ -10,9 +10,8 @@ STYLES_DIR = ROOT_DIR / "styles"
 EXPORTS_DIR = ROOT_DIR / "exports"
 TEMP_DIR = ROOT_DIR / "temp"
 
-DEFAULT_STYLE = "oddly_specific_lives"
 DEFAULT_SCENE_DURATION_SECONDS = 10
-DEFAULT_VIDEO_MINUTES = 1
+DEFAULT_VIDEO_MINUTES = 8
 
 
 def get_env(name: str, default: Optional[str] = None) -> Optional[str]:
@@ -34,3 +33,8 @@ IMAGE_PROVIDER = get_env("IMAGE_PROVIDER", "pollinations")
 IMAGE_WIDTH = int(get_env("IMAGE_WIDTH", "1280") or "1280")
 IMAGE_HEIGHT = int(get_env("IMAGE_HEIGHT", "720") or "720")
 AUTOMATIC1111_BASE_URL = get_env("AUTOMATIC1111_BASE_URL", "http://127.0.0.1:7860")
+
+GOOGLE_API_KEY = get_env("GOOGLE_API_KEY") or get_env("GEMINI_API_KEY")
+GEMINI_TEXT_MODEL = get_env("GEMINI_TEXT_MODEL", "gemini-2.5-flash")
+GEMINI_TTS_MODEL = get_env("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+GEMINI_TTS_VOICE = get_env("GEMINI_TTS_VOICE", "Achird")
